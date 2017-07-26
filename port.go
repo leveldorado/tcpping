@@ -118,6 +118,10 @@ const (
 	defaultStartRangePort = 0
 )
 
+/*Run explore setted before hosts and ports,
+for interrupt exploration use closeChan
+if ports not setted, will be setted ports range 0-1024
+*/
 func (t *PortChecker) Run(closeChan chan struct{}) chan PortCheckResult {
 	t.Lock()
 	if len(t.ports) == 0 {
