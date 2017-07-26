@@ -1,11 +1,12 @@
 package tcpping
 
 import (
-	"io"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -46,21 +47,27 @@ func (p *Port) String() string {
 }
 
 const (
-	dialTimeout = 10 * time.Second
+	dialTimeout = time.Second
 	tcpNetwork  = "tcp"
 )
 
 func (p *Port) check(host string) error {
 	conn, err := net.DialTimeout(tcpNetwork,
-		net.JoinHostPort(host, strconv.Itoa(p.Port)), dialTimeout)
-	if err == nil {
+		net.JoinHostPort(host, strconv.Itoa(int(p.Port))), dialTimeout)
+
+	switch e := err.(type) {
+	case *net.OpError:
+		if sysErr, ok := e.Err.(*os.SyscallError); ok && sysErr.Err == syscall.ECONNREFUSED {
+			p.Status = PortStatusClosed
+		} else if e.Timeout() {
+			p.Status = PortStatusTimeout
+		} else {
+			return err
+		}
+	case nil:
 		conn.Close()
 		p.Status = PortStatusOpen
-	} else if err == io.EOF {
-		p.Status = PortStatusClosed
-	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-		p.Status = PortStatusTimeout
-	} else {
+	default:
 		return err
 	}
 	return nil
@@ -128,10 +135,11 @@ func (t *PortChecker) run(resultChan chan PortCheckResult, closeChan chan struct
 	t.Lock()
 	defer close(resultChan)
 	defer t.Unlock()
+
 	for _, host := range t.hosts {
 		for _, port := range t.ports {
 			select {
-			case _ <- closeChan:
+			case <-closeChan:
 				return
 			default:
 				it := check(host, port)
