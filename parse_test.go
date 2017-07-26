@@ -69,4 +69,15 @@ func TestParsePorts(t *testing.T) {
 		So(ports, ShouldContain, uint16(36))
 		So(ports, ShouldContain, uint16(28))
 	})
+
+	Convey("port out of range", t, func() {
+		_, err := ParsePorts("70000")
+		So(err, ShouldEqual, ErrPortOutOfRange)
+	})
+
+	Convey("invalid range", t, func() {
+		_, err := ParsePorts("70-43")
+		So(err, ShouldEqual, ErrInvalidPortsRange)
+	})
+
 }
